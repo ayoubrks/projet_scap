@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Morocco Business Scraper</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.js"></script>
+</head>
+<body>
+    <div class="app-container">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="logo">
+                <i class="fa-solid fa-spider"></i>
+                <h2>Scraper Maroc</h2>
+            </div>
+            
+            <form id="scrapeForm" class="scrape-form">
+                <div class="form-group">
+                    <label for="country"><i class="fa-solid fa-globe"></i> Choisir une région</label>
+                    <input type="text" id="country" name="country" value="Maroc" placeholder="ex: Maroc, France, Europe..." required>
+                </div>
+
+                <div class="form-group">
+                    <label for="city"><i class="fa-solid fa-location-dot"></i> Choisir une ville</label>
+                    <input type="text" id="city" name="city" value="Casablanca" placeholder="ex: Casablanca, Rabat, Paris..." required>
+                </div>
+
+                <div class="form-group">
+                    <label for="category"><i class="fa-solid fa-briefcase"></i> Catégorie (Optionnel)</label>
+                    <input type="text" id="category" name="category" placeholder="ex: Restaurants, Salons de coiffure, Cliniques...">
+                </div>
+
+                <div class="form-group">
+                    <label for="max_results"><i class="fa-solid fa-list-ol"></i> Max Résultats</label>
+                    <input type="number" id="max_results" name="max_results" value="50" min="10" max="1000">
+                    <small>Version rapide optimisée.</small>
+                </div>
+
+                <div class="form-group sources-group">
+                    <label><i class="fa-solid fa-database"></i> Sources de données</label>
+                    <div class="checkbox-container">
+                        <input type="checkbox" id="src_google" name="sources" value="google" checked>
+                        <label for="src_google">Google Maps (Rapide)</label>
+                    </div>
+                    <div class="checkbox-container">
+                        <input type="checkbox" id="src_telecontact" name="sources" value="telecontact" checked>
+                        <label for="src_telecontact">Telecontact.ma</label>
+                    </div>
+                    <div class="checkbox-container">
+                        <input type="checkbox" id="src_yellowpages" name="sources" value="yellowpages">
+                        <label for="src_yellowpages">Pages-Jaunes.ma</label>
+                    </div>
+                </div>
+
+                <div class="form-group options-group">
+                    <label><i class="fa-solid fa-wand-magic-sparkles"></i> Options</label>
+                    <div class="checkbox-container">
+                        <input type="checkbox" id="deep_scrape" name="deep_scrape" checked>
+                        <label for="deep_scrape" title="Visite chaque page pour trouver l'email et le site web (Plus lent)">Enrichissement complet</label>
+                    </div>
+                </div>
+
+                <button type="submit" id="startBtn" class="btn-primary">
+                    <i class="fa-solid fa-play"></i> Lancer l'extraction
+                </button>
+            </form>
+            
+            <div class="credits">
+                <p>Version Premium 2026 ✨</p>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <header class="topbar">
+                <h1>Extraction de leads <span id="currentSelectionBadge" class="badge hidden"></span></h1>
+                <div class="status-indicator">
+                    <span class="pulse idle" id="statusPulse"></span>
+                    <span id="globalStatusText">En attente</span>
+                </div>
+            </header>
+
+            <div class="dashboard-grid">
+                <!-- Welcome State -->
+                <div id="welcomeState" class="panel empty-state">
+                    <div class="illustration">
+                        <i class="fa-solid fa-map-location-dot"></i>
+                    </div>
+                    <h3>Prêt à collecter des entreprises marocaines</h3>
+                    <p>Sélectionnez une ville et une catégorie à gauche, puis cliquez sur "Lancer l'extraction" pour commencer.</p>
+                </div>
+
+                <!-- Active/Result State (Hidden initially) -->
+                <div id="activeState" class="panel progress-panel hidden">
+                    <div class="progress-header">
+                        <h3 id="jobStatusTitle">Initialisation...</h3>
+                        <div id="loader" class="spinner"></div>
+                    </div>
+                    
+                    <div class="log-container" id="logContainer">
+                        <!-- Logs will appear here -->
+                    </div>
+
+                    <div class="progress-bar-container">
+                        <div class="progress-info">
+                            <span id="progressText">0 / 0 extraits</span>
+                            <span id="progressPercent">0%</span>
+                        </div>
+                        <div class="progress-bar">
+                            <div class="progress-fill" id="progressFill" style="width: 0%"></div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Results Panel (Hidden initially) -->
+                <div id="resultsPanel" class="panel results-panel hidden">
+                    <h3>🎉 Extraction terminée !</h3>
+                    
+                    <div class="stats-grid">
+                        <div class="stat-card">
+                            <i class="fa-solid fa-magnifying-glass stat-icon"></i>
+                            <div class="stat-val" id="statFound">0</div>
+                            <div class="stat-label">Total trouvé</div>
+                        </div>
+                        <div class="stat-card highlight">
+                            <i class="fa-solid fa-check-double stat-icon"></i>
+                            <div class="stat-val" id="statExtracted">0</div>
+                            <div class="stat-label">Leads Validés</div>
+                        </div>
+                        <div class="stat-card">
+                            <i class="fa-solid fa-eraser stat-icon"></i>
+                            <div class="stat-val" id="statDuplicates">0</div>
+                            <div class="stat-label">Doublons supprimés</div>
+                        </div>
+                    </div>
+
+                    <div class="download-section">
+                        <h4>Téléchargement</h4>
+                        <div class="download-buttons">
+                            <a id="btnDownloadExcel" href="#" class="btn-download excel">
+                                <i class="fa-regular fa-file-excel"></i> Télécharger Excel (.xlsx)
+                            </a>
+                            <a id="btnDownloadCsv" href="#" class="btn-download csv">
+                                <i class="fa-solid fa-file-csv"></i> Télécharger CSV
+                            </a>
+                        </div>
+                        <p class="download-note">Les fichiers sont formatés pour votre CRM avec les numéros au format international (+212).</p>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Notifications -->
+    <div id="notificationArea" class="notification-area"></div>
+
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+</body>
+</html>
